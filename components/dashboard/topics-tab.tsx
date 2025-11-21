@@ -113,7 +113,6 @@ export function TopicsTab({ user, subjects }: { user: User; subjects: any[] }) {
         })
       }
 
-      // Update selected topic if open
       if (selectedTopic?.id === topicId) {
         setSelectedTopic({
           ...selectedTopic,
@@ -129,6 +128,8 @@ export function TopicsTab({ user, subjects }: { user: User; subjects: any[] }) {
       setIsLoadingSummary(null)
     }
   }
+
+  const filteredTopics = selectedSubject ? topics.filter((t) => t.subject_id === selectedSubject) : topics
 
   const topicsBySubject = subjects.map((subject) => ({
     ...subject,

@@ -27,6 +27,7 @@ export function QuizzesTab({ user }: { user: User }) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [activeQuiz, setActiveQuiz] = useState<any>(null)
   const [isOpen, setIsOpen] = useState(false)
+  const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(true)
 
   useEffect(() => {
     fetchTopics()
@@ -36,7 +37,11 @@ export function QuizzesTab({ user }: { user: User }) {
   const fetchTopics = async () => {
     try {
       const supabase = createClient()
-      const { data } = await supabase.from("topics").select("*").eq("user_id", user.id)
+      const { data } = await supabase
+        .from("topics")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
       setTopics(data || [])
     } catch (error) {
       console.error("Error fetching topics:", error)
@@ -48,12 +53,15 @@ export function QuizzesTab({ user }: { user: User }) {
       const supabase = createClient()
       const { data } = await supabase
         .from("quizzes")
-        .select("*, topics(*)")
+        .select("*, topics(id, title, difficulty_level)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
+      console.log("[v0] Fetched quizzes:", data)
       setQuizzes(data || [])
     } catch (error) {
       console.error("Error fetching quizzes:", error)
+    } finally {
+      setIsLoadingQuizzes(false)
     }
   }
 
@@ -63,6 +71,11 @@ export function QuizzesTab({ user }: { user: User }) {
     setIsGenerating(true)
     try {
       const topic = topics.find((t) => t.id === selectedTopic)
+      if (!topic) {
+        alert("Topic not found")
+        return
+      }
+
       const questions = await generateQuiz(topic.title, difficulty)
 
       const supabase = createClient()
@@ -79,6 +92,7 @@ export function QuizzesTab({ user }: { user: User }) {
       fetchQuizzes()
     } catch (error) {
       console.error("Error generating quiz:", error)
+      alert("Failed to generate quiz. Please try again.")
     } finally {
       setIsGenerating(false)
     }
@@ -121,11 +135,15 @@ export function QuizzesTab({ user }: { user: User }) {
                     <SelectValue placeholder="Choose a topic" />
                   </SelectTrigger>
                   <SelectContent>
-                    {topics.map((topic) => (
-                      <SelectItem key={topic.id} value={topic.id}>
-                        {topic.title}
-                      </SelectItem>
-                    ))}
+                    {topics.length === 0 ? (
+                      <div className="p-2 text-sm text-gray-500">No topics available. Create one first!</div>
+                    ) : (
+                      topics.map((topic) => (
+                        <SelectItem key={topic.id} value={topic.id}>
+                          {topic.title}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -158,47 +176,26 @@ export function QuizzesTab({ user }: { user: User }) {
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
-        {quizzes.length === 0 ? (
+        {isLoadingQuizzes ? (
+          <div className="col-span-full flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-600"></div>
+          </div>
+        ) : quizzes.length === 0 ? (
           <div className="col-span-full text-center py-12">
             <p className="text-gray-500 mb-4">No quizzes yet</p>
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
               <DialogTrigger asChild>
                 <Button>Generate Your First Quiz</Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Generate AI Quiz</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="topic">Select Topic</Label>
-                    <Select value={selectedTopic} onValueChange={setSelectedTopic}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a topic" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {topics.map((topic) => (
-                          <SelectItem key={topic.id} value={topic.id}>
-                            {topic.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button onClick={handleGenerateQuiz} disabled={isGenerating || !selectedTopic} className="w-full">
-                    Generate Quiz
-                  </Button>
-                </div>
-              </DialogContent>
             </Dialog>
           </div>
         ) : (
           quizzes.map((quiz) => (
             <Card key={quiz.id} className="hover:shadow-lg transition">
               <CardHeader>
-                <CardTitle className="text-lg mb-2">{quiz.topics?.title}</CardTitle>
+                <CardTitle className="text-lg mb-2">{(quiz.topics as any)?.title || "Untitled"}</CardTitle>
                 <span
-                  className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                  className={`inline-block px-2 py-1 rounded text-xs font-medium w-fit ${
                     quiz.difficulty_level === "easy"
                       ? "bg-green-100 text-green-700"
                       : quiz.difficulty_level === "medium"
